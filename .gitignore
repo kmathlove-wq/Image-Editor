@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Plan files
+plans/
+implementation-plan.md
+
+# Local server logs or temp files
+*.log
+.gemini/

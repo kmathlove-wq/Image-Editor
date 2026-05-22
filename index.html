@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 배경 제거 도구</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI 배경 제거</h1>
+            <p>이미지를 업로드하면 AI가 배경을 자동으로 지워줍니다.</p>
+        </header>
+
+        <main>
+            <section class="upload-section">
+                <div id="drop-zone" class="drop-zone">
+                    <div class="drop-zone-content">
+                        <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <p>이미지를 드래그하거나 클릭하여 업로드하세요</p>
+                        <span class="file-info">PNG, JPG, WEBP 지원</span>
+                    </div>
+                    <input type="file" id="file-input" accept="image/*" hidden>
+                </div>
+            </section>
+
+            <section id="result-section" class="result-section hidden">
+                <div class="preview-container">
+                    <div class="preview-box">
+                        <h3>원본 이미지</h3>
+                        <div class="image-wrapper">
+                            <img id="original-preview" src="" alt="원본 미리보기">
+                        </div>
+                    </div>
+                    <div class="preview-box">
+                        <h3>배경 제거 결과</h3>
+                        <div class="image-wrapper processed-wrapper">
+                            <div id="loader" class="loader hidden">
+                                <div class="spinner"></div>
+                                <p id="status-text">처리 중...</p>
+                                <div class="progress-bar-container">
+                                    <div id="progress-bar" class="progress-bar"></div>
+                                </div>
+                            </div>
+                            <img id="processed-preview" src="" alt="처리된 이미지" class="hidden">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button id="reset-btn" class="secondary-btn">다시 하기</button>
+                    <a id="download-btn" class="primary-btn hidden" download="processed-image.png">다운로드</a>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2026 AI Image Tools. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>
