@@ -64,6 +64,8 @@ async function processFile(file) {
 
     try {
         const config = {
+            debug: true, // 디버그 로그 활성화
+            model: 'medium', // 기본 모델 설정
             progress: (key, current, total) => {
                 const percent = Math.round((current / total) * 100);
                 progressBar.style.width = `${percent}%`;
