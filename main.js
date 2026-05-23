@@ -116,13 +116,16 @@ async function processFile(file) {
     statusText.innerText = '준비 중...';
     loader.querySelector('.spinner').style.display = 'block';
 
+    // Scroll to results
+    resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
     // Preview Original
     if (originalImageUrl) URL.revokeObjectURL(originalImageUrl);
     originalImageUrl = URL.createObjectURL(file);
     originalPreview.src = originalImageUrl;
 
     try {
-        statusText.innerText = '엔진 초기화 중...';
+        statusText.innerText = 'AI 엔진을 불러오는 중...';
         const removeBackground = await loadLibrary();
         
         console.log('Starting background removal for:', file.name);
@@ -136,11 +139,11 @@ async function processFile(file) {
                 progressBar.style.width = `${percent}%`;
                 
                 if (key.includes('model')) {
-                    statusText.innerText = `AI 모델 다운로드 중... (${percent}%)`;
+                    statusText.innerText = `AI 모델 최적화 중... (${percent}%)`;
                 } else if (key.includes('compute')) {
-                    statusText.innerText = `배경 제거 중... (${percent}%)`;
+                    statusText.innerText = `피사체를 정교하게 분리하는 중... (${percent}%)`;
                 } else {
-                    statusText.innerText = `처리 중... (${percent}%)`;
+                    statusText.innerText = `이미지 처리 중... (${percent}%)`;
                 }
             }
         };
