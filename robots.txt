@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kmathlove-wq.github.io/Remove-image-background/sitemap.xml
