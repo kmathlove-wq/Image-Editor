@@ -187,3 +187,54 @@ function resetUI() {
     downloadBtn.classList.add('hidden');
     loader.classList.add('hidden');
 }
+
+// Modal Functionality
+const termsLink = document.getElementById('terms-link');
+const privacyLink = document.getElementById('privacy-link');
+const termsModal = document.getElementById('terms-modal');
+const privacyModal = document.getElementById('privacy-modal');
+
+function openModal(modal) {
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeModal(modal) {
+    modal.classList.add('hidden');
+    document.body.style.overflow = 'auto';
+}
+
+termsLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    openModal(termsModal);
+});
+
+privacyLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    openModal(privacyModal);
+});
+
+// Close modal when clicking the X button
+document.querySelectorAll('.modal-close').forEach(button => {
+    button.addEventListener('click', (e) => {
+        const modal = e.target.closest('.modal');
+        closeModal(modal);
+    });
+});
+
+// Close modal when clicking outside (backdrop)
+[termsModal, privacyModal].forEach(modal => {
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal(modal);
+        }
+    });
+});
+
+// Close modal with Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeModal(termsModal);
+        closeModal(privacyModal);
+    }
+});
