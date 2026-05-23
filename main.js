@@ -10,6 +10,12 @@ const statusText = document.getElementById('status-text');
 const downloadBtn = document.getElementById('download-btn');
 const resetBtn = document.getElementById('reset-btn');
 
+// Initial State Check
+console.log('Page loaded. Cross-Origin Isolated:', window.crossOriginIsolated);
+if (!window.crossOriginIsolated) {
+    console.warn('보안 헤더(COOP/COEP)가 활성화되지 않았습니다. 배경 제거 속도가 느려질 수 있습니다.');
+}
+
 // State
 let imglyRemoveBackground = null;
 let originalImageUrl = null;
@@ -20,20 +26,31 @@ async function loadLibrary() {
     if (imglyRemoveBackground) return imglyRemoveBackground;
     
     try {
+        console.log('Loading library from CDN...');
         const module = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm');
-        // ESM 모듈에서 default 익스포트를 추출합니다.
-        imglyRemoveBackground = module.default;
+        
+        // ESM 모듈에서 함수 추출
+        imglyRemoveBackground = module.default || module.removeBackground;
         
         if (typeof imglyRemoveBackground !== 'function') {
-            // 일부 CDN 환경에서 모듈 구조가 다를 수 있으므로 체크
-            imglyRemoveBackground = module.removeBackground || module.default;
+            // 다양한 모듈 구조 대응
+            for (const key in module) {
+                if (typeof module[key] === 'function') {
+                    imglyRemoveBackground = module[key];
+                    break;
+                }
+            }
         }
         
-        console.log('Library loaded successfully:', typeof imglyRemoveBackground);
+        if (typeof imglyRemoveBackground !== 'function') {
+            throw new Error('라이브러리 구조가 올바르지 않습니다.');
+        }
+        
+        console.log('Library loaded successfully.');
         return imglyRemoveBackground;
     } catch (error) {
         console.error('Library loading failed:', error);
-        throw new Error('배경 제거 엔진을 불러오지 못했습니다. 네트워크 연결을 확인해 주세요.');
+        throw new Error('배경 제거 엔진을 불러오지 못했습니다. 네트워크 상태를 확인해 주세요.');
     }
 }
 
