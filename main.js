@@ -48,6 +48,11 @@ resetBtn.addEventListener('click', resetUI);
 
 // Main Processing Function
 async function processFile(file) {
+    if (!file || !file.type.startsWith('image/')) {
+        alert('올바른 이미지 파일을 선택해 주세요.');
+        return;
+    }
+
     // UI Reset for new file
     resultSection.classList.remove('hidden');
     dropZone.parentElement.classList.add('hidden');
@@ -56,6 +61,7 @@ async function processFile(file) {
     downloadBtn.classList.add('hidden');
     progressBar.style.width = '0%';
     statusText.innerText = '준비 중...';
+    loader.querySelector('.spinner').style.display = 'block';
 
     // Preview Original
     if (originalImageUrl) URL.revokeObjectURL(originalImageUrl);
@@ -63,10 +69,11 @@ async function processFile(file) {
     originalPreview.src = originalImageUrl;
 
     try {
+        console.log('Starting background removal for:', file.name);
         const config = {
-            publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/', // WASM/ONNX 자산 경로 명시
+            publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/',
             debug: true,
-            model: 'isnet', // 최적화된 기본 모델
+            model: 'isnet',
             progress: (key, current, total) => {
                 const percent = Math.round((current / total) * 100);
                 progressBar.style.width = `${percent}%`;
@@ -81,7 +88,6 @@ async function processFile(file) {
             }
         };
 
-        statusText.innerText = '이미지 분석 중...';
         const blob = await imglyRemoveBackground(file, config);
 
         // Preview Processed
