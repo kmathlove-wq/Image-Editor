@@ -21,7 +21,15 @@ async function loadLibrary() {
     
     try {
         const module = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm');
+        // ESM 모듈에서 default 익스포트를 추출합니다.
         imglyRemoveBackground = module.default;
+        
+        if (typeof imglyRemoveBackground !== 'function') {
+            // 일부 CDN 환경에서 모듈 구조가 다를 수 있으므로 체크
+            imglyRemoveBackground = module.removeBackground || module.default;
+        }
+        
+        console.log('Library loaded successfully:', typeof imglyRemoveBackground);
         return imglyRemoveBackground;
     } catch (error) {
         console.error('Library loading failed:', error);
