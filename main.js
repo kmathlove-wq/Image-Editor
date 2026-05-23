@@ -1,5 +1,3 @@
-import imglyRemoveBackground from 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm';
-
 // DOM Elements
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
@@ -13,8 +11,23 @@ const downloadBtn = document.getElementById('download-btn');
 const resetBtn = document.getElementById('reset-btn');
 
 // State
+let imglyRemoveBackground = null;
 let originalImageUrl = null;
 let processedImageUrl = null;
+
+// Library Loader
+async function loadLibrary() {
+    if (imglyRemoveBackground) return imglyRemoveBackground;
+    
+    try {
+        const module = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm');
+        imglyRemoveBackground = module.default;
+        return imglyRemoveBackground;
+    } catch (error) {
+        console.error('Library loading failed:', error);
+        throw new Error('배경 제거 엔진을 불러오지 못했습니다. 네트워크 연결을 확인해 주세요.');
+    }
+}
 
 // Event Listeners
 dropZone.addEventListener('click', () => fileInput.click());
@@ -69,6 +82,9 @@ async function processFile(file) {
     originalPreview.src = originalImageUrl;
 
     try {
+        statusText.innerText = '엔진 초기화 중...';
+        const removeBackground = await loadLibrary();
+        
         console.log('Starting background removal for:', file.name);
         const config = {
             publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/',
@@ -88,7 +104,7 @@ async function processFile(file) {
             }
         };
 
-        const blob = await imglyRemoveBackground(file, config);
+        const blob = await removeBackground(file, config);
 
         // Preview Processed
         if (processedImageUrl) URL.revokeObjectURL(processedImageUrl);
