@@ -112,9 +112,10 @@ async function processFile(file) {
         
         console.log('Starting background removal for:', file.name);
         const config = {
-            publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/',
+            // 공식 데이터 패키지 CDN 주소로 변경
+            publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.5.5/dist/',
             debug: true,
-            model: 'isnet',
+            model: 'medium', // 안정적인 medium 모델 사용
             progress: (key, current, total) => {
                 const percent = Math.round((current / total) * 100);
                 progressBar.style.width = `${percent}%`;
