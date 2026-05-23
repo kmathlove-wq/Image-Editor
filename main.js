@@ -64,8 +64,9 @@ async function processFile(file) {
 
     try {
         const config = {
-            debug: true, // 디버그 로그 활성화
-            model: 'medium', // 기본 모델 설정
+            publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/', // WASM/ONNX 자산 경로 명시
+            debug: true,
+            model: 'isnet', // 최적화된 기본 모델
             progress: (key, current, total) => {
                 const percent = Math.round((current / total) * 100);
                 progressBar.style.width = `${percent}%`;
