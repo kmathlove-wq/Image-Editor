@@ -11,10 +11,25 @@ const downloadBtn = document.getElementById('download-btn');
 const resetBtn = document.getElementById('reset-btn');
 
 // Initial State Check
-console.log('Page loaded. Cross-Origin Isolated:', window.crossOriginIsolated);
-if (!window.crossOriginIsolated) {
-    console.warn('보안 헤더(COOP/COEP)가 활성화되지 않았습니다. 배경 제거 속도가 느려질 수 있습니다.');
+async function checkSecurityContext() {
+    console.log('Page loaded. Cross-Origin Isolated:', window.crossOriginIsolated);
+    
+    if (!window.crossOriginIsolated) {
+        console.warn('보안 헤더(COOP/COEP)가 아직 활성화되지 않았습니다. 서비스 워커 등록을 확인합니다.');
+        
+        // 서비스 워커 등록 상태 확인
+        if ('serviceWorker' in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            if (registrations.length === 0) {
+                console.log('서비스 워커가 등록되지 않았습니다. coi-serviceworker가 작동 중인지 확인하세요.');
+            } else {
+                console.log('서비스 워커는 등록되어 있으나, 페이지가 아직 격리되지 않았습니다. 새로고침이 필요할 수 있습니다.');
+            }
+        }
+    }
 }
+
+checkSecurityContext();
 
 // State
 let imglyRemoveBackground = null;
