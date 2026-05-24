@@ -30,8 +30,8 @@ let drawHistory = [];
 let session = null;
 let processedImageUrl = null;
 
-// Model URL - Using a web-optimized FP16 version to avoid int64 issues and reduce size
-const MODEL_URL = 'https://huggingface.co/Xenova/lama-fp16/resolve/main/onnx/model_fp16.onnx';
+// Model URL - Reverting to verified lama_fp32 model
+const MODEL_URL = 'https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx';
 
 // Initialize
 async function init() {
@@ -201,8 +201,9 @@ async function loadModel() {
         statusText.innerText = 'AI 모델을 불러오는 중 (약 200MB)...';
         if (progressBar) progressBar.style.width = '30%';
         
+        // Force 'wasm' to handle int64 tensors which 'webgl' doesn't support well
         const options = {
-            executionProviders: ['webgl', 'wasm'],
+            executionProviders: ['wasm'],
             graphOptimizationLevel: 'all'
         };
         
@@ -211,7 +212,7 @@ async function loadModel() {
         return session;
     } catch (error) {
         console.error('Model loading failed:', error);
-        throw new Error('AI 모델을 불러오지 못했습니다.');
+        throw new Error('AI 모델 파일에 접근할 수 없거나 형식이 올바르지 않습니다.');
     }
 }
 
