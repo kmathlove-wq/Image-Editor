@@ -97,6 +97,7 @@ async function init() {
         });
     }
 
+    syncUndoBtn();
     setupModals();
 }
 
@@ -175,18 +176,25 @@ function clearMask() {
     if (!maskCtx) return;
     maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
     drawHistory = [];
+    syncUndoBtn();
 }
 
 function saveHistory() {
     if (!maskCtx) return;
     drawHistory.push(maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height));
     if (drawHistory.length > 20) drawHistory.shift();
+    syncUndoBtn();
 }
 
 function undo() {
     if (drawHistory.length > 0 && maskCtx) {
         maskCtx.putImageData(drawHistory.pop(), 0, 0);
+        syncUndoBtn();
     }
+}
+
+function syncUndoBtn() {
+    if (undoBtn) undoBtn.disabled = drawHistory.length === 0;
 }
 
 // AI Engine - OpenCV.js Telea inpainting
