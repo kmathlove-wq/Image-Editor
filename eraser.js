@@ -265,7 +265,7 @@ async function runInpainting() {
                 downloadBtn.download = `erased-${Date.now()}.png`;
                 downloadBtn.classList.remove('hidden');
             }
-            if (eraseBtn) eraseBtn.classList.add('hidden');
+            // eraseBtn 유지 → 추가 패스 가능
         });
 
         statusText.innerText = '완료!';
