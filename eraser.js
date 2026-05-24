@@ -1,24 +1,26 @@
 // DOM Elements
-const dropZone = document.getElementById('drop-zone');
-const fileInput = document.getElementById('file-input');
-const uploadContainer = document.getElementById('upload-container');
-const editorSection = document.getElementById('editor-section');
-const imageCanvas = document.getElementById('image-canvas');
-const maskCanvas = document.getElementById('mask-canvas');
-const brushSizeInput = document.getElementById('brush-size');
-const brushSizeValue = document.getElementById('brush-size-value');
-const undoBtn = document.getElementById('undo-btn');
-const clearBtn = document.getElementById('clear-btn');
-const resetBtn = document.getElementById('reset-btn');
-const eraseBtn = document.getElementById('erase-btn');
-const downloadBtn = document.getElementById('download-btn');
-const loader = document.getElementById('editor-loader');
-const progressBar = document.getElementById('progress-bar');
-const statusText = document.getElementById('status-text');
+const getEl = (id) => document.getElementById(id);
+
+const dropZone = getEl('drop-zone');
+const fileInput = getEl('file-input');
+const uploadContainer = getEl('upload-container');
+const editorSection = getEl('editor-section');
+const imageCanvas = getEl('image-canvas');
+const maskCanvas = getEl('mask-canvas');
+const brushSizeInput = getEl('brush-size');
+const brushSizeValue = getEl('brush-size-value');
+const undoBtn = getEl('undo-btn');
+const clearBtn = getEl('clear-btn');
+const resetBtn = getEl('reset-btn');
+const eraseBtn = getEl('erase-btn');
+const downloadBtn = getEl('download-btn');
+const loader = getEl('editor-loader');
+const progressBar = getEl('progress-bar');
+const statusText = getEl('status-text');
 
 // Contexts
-const imgCtx = imageCanvas.getContext('2d');
-const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
+const imgCtx = imageCanvas ? imageCanvas.getContext('2d') : null;
+const maskCtx = maskCanvas ? maskCanvas.getContext('2d', { willReadFrequently: true }) : null;
 
 // State
 let originalImage = null;
@@ -33,10 +35,14 @@ const MODEL_URL = 'https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32
 
 // Initialize
 async function init() {
-    brushSizeInput.addEventListener('input', (e) => {
-        brushSize = parseInt(e.target.value);
-        brushSizeValue.innerText = `${brushSize}px`;
-    });
+    if (!maskCanvas || !imgCtx || !maskCtx) return;
+
+    if (brushSizeInput) {
+        brushSizeInput.addEventListener('input', (e) => {
+            brushSize = parseInt(e.target.value);
+            if (brushSizeValue) brushSizeValue.innerText = `${brushSize}px`;
+        });
+    }
 
     // Canvas Events
     maskCanvas.addEventListener('mousedown', startDrawing);
@@ -68,30 +74,34 @@ async function init() {
     });
 
     // Button Events
-    undoBtn.addEventListener('click', undo);
-    clearBtn.addEventListener('click', clearMask);
-    resetBtn.addEventListener('click', resetUI);
-    eraseBtn.addEventListener('click', runInpainting);
+    if (undoBtn) undoBtn.addEventListener('click', undo);
+    if (clearBtn) clearBtn.addEventListener('click', clearMask);
+    if (resetBtn) resetBtn.addEventListener('click', resetUI);
+    if (eraseBtn) eraseBtn.addEventListener('click', runInpainting);
 
     // Upload Events
-    dropZone.addEventListener('click', () => fileInput.click());
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('dragover');
-    });
-    dropZone.addEventListener('dragleave', () => {
-        dropZone.classList.remove('dragover');
-    });
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-        const file = e.dataTransfer.files[0];
-        if (file) processFile(file);
-    });
-    fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) processFile(file);
-    });
+    if (dropZone) {
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) processFile(file);
+        });
+    }
+    if (fileInput) {
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) processFile(file);
+        });
+    }
+
+    setupModals();
 }
 
 // File Processing
@@ -147,12 +157,12 @@ function draw(e) {
     if (!isDrawing) return;
 
     const rect = maskCanvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = (e.clientX - rect.left) * (maskCanvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (maskCanvas.height / rect.height);
 
     maskCtx.lineWidth = brushSize;
     maskCtx.lineCap = 'round';
-    maskCtx.strokeStyle = 'rgba(255, 0, 0, 1)'; // Solid red for internal mask, though UI has opacity
+    maskCtx.strokeStyle = 'rgba(255, 0, 0, 1)';
     
     maskCtx.lineTo(x, y);
     maskCtx.stroke();
@@ -166,17 +176,19 @@ function stopDrawing() {
 }
 
 function clearMask() {
+    if (!maskCtx) return;
     maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
     drawHistory = [];
 }
 
 function saveHistory() {
+    if (!maskCtx) return;
     drawHistory.push(maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height));
     if (drawHistory.length > 20) drawHistory.shift();
 }
 
 function undo() {
-    if (drawHistory.length > 0) {
+    if (drawHistory.length > 0 && maskCtx) {
         maskCtx.putImageData(drawHistory.pop(), 0, 0);
     }
 }
@@ -187,16 +199,15 @@ async function loadModel() {
     
     try {
         statusText.innerText = 'AI 모델을 불러오는 중 (약 200MB)...';
-        progressBar.style.width = '30%';
+        if (progressBar) progressBar.style.width = '30%';
         
-        // Use WebGL or WASM. WebGPU is better if available.
         const options = {
             executionProviders: ['webgl', 'wasm'],
             graphOptimizationLevel: 'all'
         };
         
         session = await ort.InferenceSession.create(MODEL_URL, options);
-        progressBar.style.width = '100%';
+        if (progressBar) progressBar.style.width = '100%';
         return session;
     } catch (error) {
         console.error('Model loading failed:', error);
@@ -208,32 +219,28 @@ async function runInpainting() {
     try {
         loader.classList.remove('hidden');
         statusText.innerText = 'AI 엔진 준비 중...';
-        progressBar.style.width = '10%';
+        if (progressBar) progressBar.style.width = '10%';
 
         const model = await loadModel();
         statusText.innerText = '이미지 분석 및 처리 중...';
-        progressBar.style.width = '50%';
+        if (progressBar) progressBar.style.width = '50%';
 
-        // 1. Prepare Inputs (Image and Mask)
-        // LaMa expects 3xHxW image and 1xHxW mask, usually 512x512
         const size = 512;
         const inputImg = preprocessImage(imageCanvas, size);
         const inputMask = preprocessMask(maskCanvas, size);
 
-        // 2. Run Inference
         const feeds = {
             image: inputImg,
             mask: inputMask
         };
 
         const results = await model.run(feeds);
-        const output = results.output; // Adjust based on model output name
+        const output = results.output || results[Object.keys(results)[0]];
 
-        // 3. Post-process
         displayResult(output, imageCanvas.width, imageCanvas.height);
 
         statusText.innerText = '완료!';
-        progressBar.style.width = '100%';
+        if (progressBar) progressBar.style.width = '100%';
         setTimeout(() => loader.classList.add('hidden'), 500);
 
     } catch (error) {
@@ -254,9 +261,9 @@ function preprocessImage(canvas, size) {
     const floatData = new Float32Array(3 * size * size);
 
     for (let i = 0; i < size * size; i++) {
-        floatData[i] = data[i * 4] / 255.0;           // R
-        floatData[size * size + i] = data[i * 4 + 1] / 255.0; // G
-        floatData[2 * size * size + i] = data[i * 4 + 2] / 255.0; // B
+        floatData[i] = data[i * 4] / 255.0;
+        floatData[size * size + i] = data[i * 4 + 1] / 255.0;
+        floatData[2 * size * size + i] = data[i * 4 + 2] / 255.0;
     }
 
     return new ort.Tensor('float32', floatData, [1, 3, size, size]);
@@ -273,7 +280,6 @@ function preprocessMask(canvas, size) {
     const floatData = new Float32Array(size * size);
 
     for (let i = 0; i < size * size; i++) {
-        // Any pixel with alpha > 0 or red > 0 is part of mask
         floatData[i] = data[i * 4 + 3] > 0 ? 1.0 : 0.0;
     }
 
@@ -297,78 +303,70 @@ function displayResult(tensor, width, height) {
     }
     ctx.putImageData(imageData, 0, 0);
 
-    // Update main canvas
     imgCtx.clearRect(0, 0, width, height);
     imgCtx.drawImage(tempCanvas, 0, 0, width, height);
     
-    // Clear mask and show download
     clearMask();
     
     if (processedImageUrl) URL.revokeObjectURL(processedImageUrl);
     imageCanvas.toBlob((blob) => {
         processedImageUrl = URL.createObjectURL(blob);
-        downloadBtn.href = processedImageUrl;
-        downloadBtn.download = `erased-${Date.now()}.png`;
-        downloadBtn.classList.remove('hidden');
-        eraseBtn.classList.add('hidden');
+        if (downloadBtn) {
+            downloadBtn.href = processedImageUrl;
+            downloadBtn.download = `erased-${Date.now()}.png`;
+            downloadBtn.classList.remove('hidden');
+        }
+        if (eraseBtn) eraseBtn.classList.add('hidden');
     });
 }
 
 function resetUI() {
-    uploadContainer.classList.remove('hidden');
-    editorSection.classList.add('hidden');
-    fileInput.value = '';
+    if (uploadContainer) uploadContainer.classList.remove('hidden');
+    if (editorSection) editorSection.classList.add('hidden');
+    if (fileInput) fileInput.value = '';
     clearMask();
-    downloadBtn.classList.add('hidden');
-    eraseBtn.classList.remove('hidden');
+    if (downloadBtn) downloadBtn.classList.add('hidden');
+    if (eraseBtn) eraseBtn.classList.remove('hidden');
 }
 
-// Modal Functionality
-const termsLink = document.getElementById('terms-link');
-const privacyLink = document.getElementById('privacy-link');
-const termsModal = document.getElementById('terms-modal');
-const privacyModal = document.getElementById('privacy-modal');
+// Modal Logic
+function setupModals() {
+    const termsLink = getEl('terms-link');
+    const privacyLink = getEl('privacy-link');
+    const termsModal = getEl('terms-modal');
+    const privacyModal = getEl('privacy-modal');
 
-function openModal(modal) {
-    modal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-}
+    if (!termsLink || !privacyLink || !termsModal || !privacyModal) return;
 
-function closeModal(modal) {
-    modal.classList.add('hidden');
-    document.body.style.overflow = 'auto';
-}
+    const openModal = (m) => {
+        m.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    };
+    const closeModal = (m) => {
+        m.classList.add('hidden');
+        document.body.style.overflow = 'auto';
+    };
 
-termsLink.addEventListener('click', (e) => {
-    e.preventDefault();
-    openModal(termsModal);
-});
+    termsLink.addEventListener('click', (e) => { e.preventDefault(); openModal(termsModal); });
+    privacyLink.addEventListener('click', (e) => { e.preventDefault(); openModal(privacyModal); });
 
-privacyLink.addEventListener('click', (e) => {
-    e.preventDefault();
-    openModal(privacyModal);
-});
-
-document.querySelectorAll('.modal-close').forEach(button => {
-    button.addEventListener('click', (e) => {
-        const modal = e.target.closest('.modal');
-        closeModal(modal);
+    document.querySelectorAll('.modal-close').forEach(b => {
+        b.addEventListener('click', () => {
+            const m = b.closest('.modal');
+            if (m) closeModal(m);
+        });
     });
-});
 
-[termsModal, privacyModal].forEach(modal => {
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            closeModal(modal);
+    [termsModal, privacyModal].forEach(m => {
+        m.addEventListener('click', (e) => { if (e.target === m) closeModal(m); });
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeModal(termsModal);
+            closeModal(privacyModal);
         }
     });
-});
-
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        closeModal(termsModal);
-        closeModal(privacyModal);
-    }
-});
+}
 
 init();
