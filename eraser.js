@@ -27,11 +27,7 @@ let originalImage = null;
 let isDrawing = false;
 let brushSize = 30;
 let drawHistory = [];
-let session = null;
 let processedImageUrl = null;
-
-// Model URL - Reverting to verified lama_fp32 model
-const MODEL_URL = 'https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx';
 
 // Initialize
 async function init() {
@@ -193,61 +189,78 @@ function undo() {
     }
 }
 
-// AI Engine
-async function loadModel() {
-    if (session) return session;
+// AI Engine - OpenCV.js Telea inpainting
 
-    if (typeof ort === 'undefined') {
-        throw new Error('ONNX Runtime 라이브러리를 불러오지 못했습니다. 페이지를 새로고침 해주세요.');
-    }
-
-    try {
-        statusText.innerText = 'AI 환경을 준비하는 중...';
-        if (progressBar) progressBar.style.width = '10%';
-
-        // numThreads=1: SharedArrayBuffer 없이 동작 (서비스워커 격리 불필요)
-        ort.env.wasm.numThreads = 1;
-
-        statusText.innerText = 'AI 모델을 불러오는 중 (약 200MB, 처음에만 오래 걸립니다)...';
-        if (progressBar) progressBar.style.width = '30%';
-
-        const options = {
-            executionProviders: ['wasm'],
-            graphOptimizationLevel: 'all'
+function waitForOpenCV() {
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(
+            () => reject(new Error('OpenCV.js 로딩 시간 초과. 네트워크 연결을 확인해주세요.')),
+            60000
+        );
+        const check = () => {
+            if (typeof cv !== 'undefined' && cv.imread) {
+                clearTimeout(timeout);
+                resolve();
+            } else if (typeof cv !== 'undefined') {
+                cv['onRuntimeInitialized'] = () => { clearTimeout(timeout); resolve(); };
+            } else {
+                setTimeout(check, 100);
+            }
         };
-
-        session = await ort.InferenceSession.create(MODEL_URL, options);
-        if (progressBar) progressBar.style.width = '100%';
-        return session;
-    } catch (error) {
-        console.error('Model loading failed:', error);
-        throw new Error('AI 모델 로딩 실패: ' + (error.message || String(error)));
-    }
+        check();
+    });
 }
 
 async function runInpainting() {
     try {
         loader.classList.remove('hidden');
-        statusText.innerText = 'AI 엔진 준비 중...';
+        statusText.innerText = 'AI 엔진 준비 중 (처음 실행 시 잠시 기다려주세요)...';
         if (progressBar) progressBar.style.width = '10%';
 
-        const model = await loadModel();
-        statusText.innerText = '이미지 분석 및 처리 중...';
+        await waitForOpenCV();
+
+        statusText.innerText = '이미지 분석 및 복원 중...';
         if (progressBar) progressBar.style.width = '50%';
 
-        const size = 512;
-        const inputImg = preprocessImage(imageCanvas, size);
-        const inputMask = preprocessMask(maskCanvas, size);
+        // 원본 이미지 읽기
+        const src = cv.imread(imageCanvas);
 
-        const feeds = {
-            image: inputImg,
-            mask: inputMask
-        };
+        // 마스크 캔버스 → 이진 마스크 생성 (브러시로 칠한 영역 = 255)
+        const maskRGBA = cv.imread(maskCanvas);
+        const gray = new cv.Mat();
+        cv.cvtColor(maskRGBA, gray, cv.COLOR_RGBA2GRAY);
+        const mask = new cv.Mat();
+        cv.threshold(gray, mask, 1, 255, cv.THRESH_BINARY);
 
-        const results = await model.run(feeds);
-        const output = results.output || results[Object.keys(results)[0]];
+        // 마스크 약간 팽창 (브러시 경계 잔상 제거)
+        const kernel = cv.Mat.ones(3, 3, cv.CV_8U);
+        const dilated = new cv.Mat();
+        cv.dilate(mask, dilated, kernel);
 
-        displayResult(output, imageCanvas.width, imageCanvas.height);
+        // RGBA → BGR 변환 후 인페인팅
+        const bgr = new cv.Mat();
+        cv.cvtColor(src, bgr, cv.COLOR_RGBA2BGR);
+        const result = new cv.Mat();
+        cv.inpaint(bgr, dilated, result, 5, cv.INPAINT_TELEA);
+
+        // BGR → RGBA 변환 후 캔버스에 출력
+        const rgba = new cv.Mat();
+        cv.cvtColor(result, rgba, cv.COLOR_BGR2RGBA);
+        cv.imshow(imageCanvas, rgba);
+
+        [src, maskRGBA, gray, mask, kernel, dilated, bgr, result, rgba].forEach(m => m.delete());
+
+        clearMask();
+        if (processedImageUrl) URL.revokeObjectURL(processedImageUrl);
+        imageCanvas.toBlob((blob) => {
+            processedImageUrl = URL.createObjectURL(blob);
+            if (downloadBtn) {
+                downloadBtn.href = processedImageUrl;
+                downloadBtn.download = `erased-${Date.now()}.png`;
+                downloadBtn.classList.remove('hidden');
+            }
+            if (eraseBtn) eraseBtn.classList.add('hidden');
+        });
 
         statusText.innerText = '완료!';
         if (progressBar) progressBar.style.width = '100%';
@@ -259,76 +272,6 @@ async function runInpainting() {
         alert('이미지 처리 중 오류가 발생했습니다:\n' + (error.message || String(error)));
         loader.classList.add('hidden');
     }
-}
-
-function preprocessImage(canvas, size) {
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = tempCanvas.height = size;
-    const ctx = tempCanvas.getContext('2d');
-    ctx.drawImage(canvas, 0, 0, size, size);
-    
-    const imageData = ctx.getImageData(0, 0, size, size);
-    const { data } = imageData;
-    const floatData = new Float32Array(3 * size * size);
-
-    for (let i = 0; i < size * size; i++) {
-        floatData[i] = data[i * 4] / 255.0;
-        floatData[size * size + i] = data[i * 4 + 1] / 255.0;
-        floatData[2 * size * size + i] = data[i * 4 + 2] / 255.0;
-    }
-
-    return new ort.Tensor('float32', floatData, [1, 3, size, size]);
-}
-
-function preprocessMask(canvas, size) {
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = tempCanvas.height = size;
-    const ctx = tempCanvas.getContext('2d');
-    ctx.drawImage(canvas, 0, 0, size, size);
-    
-    const imageData = ctx.getImageData(0, 0, size, size);
-    const { data } = imageData;
-    const floatData = new Float32Array(size * size);
-
-    for (let i = 0; i < size * size; i++) {
-        floatData[i] = data[i * 4 + 3] > 0 ? 1.0 : 0.0;
-    }
-
-    return new ort.Tensor('float32', floatData, [1, 1, size, size]);
-}
-
-function displayResult(tensor, width, height) {
-    const size = tensor.dims[2];
-    const data = tensor.data;
-    
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = tempCanvas.height = size;
-    const ctx = tempCanvas.getContext('2d');
-    const imageData = ctx.createImageData(size, size);
-
-    for (let i = 0; i < size * size; i++) {
-        imageData.data[i * 4] = Math.max(0, Math.min(255, data[i] * 255));
-        imageData.data[i * 4 + 1] = Math.max(0, Math.min(255, data[size * size + i] * 255));
-        imageData.data[i * 4 + 2] = Math.max(0, Math.min(255, data[2 * size * size + i] * 255));
-        imageData.data[i * 4 + 3] = 255;
-    }
-    ctx.putImageData(imageData, 0, 0);
-
-    imgCtx.clearRect(0, 0, width, height);
-    imgCtx.drawImage(tempCanvas, 0, 0, width, height);
-    
-    clearMask();
-    
-    if (processedImageUrl) URL.revokeObjectURL(processedImageUrl);
-    imageCanvas.toBlob((blob) => {
-        processedImageUrl = URL.createObjectURL(blob);
-        if (downloadBtn) {
-            downloadBtn.href = processedImageUrl;
-            downloadBtn.download = `erased-${Date.now()}.png`;
-            downloadBtn.classList.remove('hidden');
-        }
-        if (eraseBtn) eraseBtn.classList.add('hidden');
-    });
 }
 
 function resetUI() {
