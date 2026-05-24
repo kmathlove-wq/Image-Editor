@@ -282,26 +282,73 @@ async function runInpainting() {
         cv.dilate(extMask, dilated, k7, new cv.Point(-1, -1), 2);
         k7.delete(); extMask.delete();
 
-        // ── 4. 배경 평균색으로 마스크 영역 선채우기 (번짐 원천 차단) ─
-        statusText.innerText = '배경 복원 중...';
-        if (progressBar) progressBar.style.width = '60%';
+        // ── 4. 공간 인식 배경 추정 (정규화 블러) ────────────────────
+        // 단순 평균 대신 위치별 배경색을 추정 → 그라디언트·그림자 처리
+        statusText.innerText = '배경 패턴 분석 중...';
+        if (progressBar) progressBar.style.width = '55%';
 
-        const invDilated = new cv.Mat();
-        cv.bitwise_not(dilated, invDilated);
-        const bgMean = new cv.Mat(), bgStdMat = new cv.Mat();
-        cv.meanStdDev(bgr, bgMean, bgStdMat, invDilated);
-        invDilated.delete(); bgStdMat.delete();
+        const sc = 4; // 저해상도 처리로 속도 향상
+        const sW = Math.max(4, Math.floor(bgr.cols / sc));
+        const sH = Math.max(4, Math.floor(bgr.rows / sc));
 
+        // 저해상도 BGR·마스크
+        const sBgr = new cv.Mat();
+        cv.resize(bgr, sBgr, new cv.Size(sW, sH));
+        const sDil = new cv.Mat();
+        cv.resize(dilated, sDil, new cv.Size(sW, sH), 0, 0, cv.INTER_NEAREST);
+        cv.threshold(sDil, sDil, 127, 255, cv.THRESH_BINARY);
+
+        // 마스크 영역 제로 처리 후 float 변환
+        const bgF = new cv.Mat();
+        sBgr.convertTo(bgF, cv.CV_32FC3, 1.0 / 255.0);
+        bgF.setTo(new cv.Scalar(0, 0, 0), sDil);
+        sBgr.delete();
+
+        // 가중치 맵: 배경=1.0, 마스크=0.0
+        const invSDil = new cv.Mat();
+        cv.bitwise_not(sDil, invSDil);
+        sDil.delete();
+        const wF = new cv.Mat();
+        invSDil.convertTo(wF, cv.CV_32F, 1.0 / 255.0);
+        invSDil.delete();
+
+        // 박스 블러 4회 ≈ 가우시안 (배경 색상 공간 보간)
+        const bSz = Math.max(5, (Math.floor(Math.min(sW, sH) / 3) * 2 + 1));
+        const bk = new cv.Size(bSz, bSz);
+        for (let i = 0; i < 4; i++) {
+            cv.blur(bgF, bgF, bk);
+            cv.blur(wF, wF, bk);
+        }
+
+        // 3채널 가중치 생성 후 정규화 나눗셈 → 위치별 배경 추정
+        const wA = wF.clone(), wB = wF.clone();
+        const wVec = new cv.MatVector();
+        wVec.push_back(wF); wVec.push_back(wA); wVec.push_back(wB);
+        const wF3 = new cv.Mat();
+        cv.merge(wVec, wF3);
+        wVec.delete(); wF.delete(); wA.delete(); wB.delete();
+
+        const estF = new cv.Mat();
+        cv.divide(bgF, wF3, estF, 1.0);
+        bgF.delete(); wF3.delete();
+
+        // uint8 변환 → 원래 크기 업스케일
+        const est8 = new cv.Mat();
+        estF.convertTo(est8, cv.CV_8UC3, 255.0);
+        estF.delete();
+
+        const bgEst = new cv.Mat();
+        cv.resize(est8, bgEst, new cv.Size(bgr.cols, bgr.rows));
+        est8.delete();
+
+        // 마스크 영역에 위치별 배경 추정값 적용
         const prefilled = bgr.clone();
-        prefilled.setTo(
-            new cv.Scalar(bgMean.data64F[0], bgMean.data64F[1], bgMean.data64F[2]),
-            dilated
-        );
-        bgMean.delete();
+        bgEst.copyTo(prefilled, dilated);
+        bgEst.delete();
 
-        // ── 5. Telea 인페인팅 (반경 5) — 경계만 자연스럽게 블렌딩 ──
+        // ── 5. Telea 인페인팅 (반경 5) — 경계 블렌딩만 담당 ────────
         statusText.innerText = '경계 정리 중...';
-        if (progressBar) progressBar.style.width = '80%';
+        if (progressBar) progressBar.style.width = '85%';
 
         const result = new cv.Mat();
         cv.inpaint(prefilled, dilated, result, 5, cv.INPAINT_TELEA);
