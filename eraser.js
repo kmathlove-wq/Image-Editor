@@ -196,23 +196,32 @@ function undo() {
 // AI Engine
 async function loadModel() {
     if (session) return session;
-    
+
+    if (typeof ort === 'undefined') {
+        throw new Error('ONNX Runtime 라이브러리를 불러오지 못했습니다. 페이지를 새로고침 해주세요.');
+    }
+
     try {
-        statusText.innerText = 'AI 모델을 불러오는 중 (약 200MB)...';
+        statusText.innerText = 'AI 환경을 준비하는 중...';
+        if (progressBar) progressBar.style.width = '10%';
+
+        // numThreads=1: SharedArrayBuffer 없이 동작 (서비스워커 격리 불필요)
+        ort.env.wasm.numThreads = 1;
+
+        statusText.innerText = 'AI 모델을 불러오는 중 (약 200MB, 처음에만 오래 걸립니다)...';
         if (progressBar) progressBar.style.width = '30%';
-        
-        // Force 'wasm' to handle int64 tensors which 'webgl' doesn't support well
+
         const options = {
             executionProviders: ['wasm'],
             graphOptimizationLevel: 'all'
         };
-        
+
         session = await ort.InferenceSession.create(MODEL_URL, options);
         if (progressBar) progressBar.style.width = '100%';
         return session;
     } catch (error) {
         console.error('Model loading failed:', error);
-        throw new Error('AI 모델 파일에 접근할 수 없거나 형식이 올바르지 않습니다.');
+        throw new Error('AI 모델 로딩 실패: ' + (error.message || String(error)));
     }
 }
 
@@ -246,7 +255,8 @@ async function runInpainting() {
 
     } catch (error) {
         console.error('Inpainting failed:', error);
-        alert('이미지 처리 중 오류가 발생했습니다: ' + error.message);
+        if (statusText) statusText.innerText = '오류 발생';
+        alert('이미지 처리 중 오류가 발생했습니다:\n' + (error.message || String(error)));
         loader.classList.add('hidden');
     }
 }
