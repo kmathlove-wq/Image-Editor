@@ -242,12 +242,13 @@ async function runInpainting() {
         const bgr = new cv.Mat();
         cv.cvtColor(src, bgr, cv.COLOR_RGBA2BGR);
 
-        // ── 2. 피사체 어두운 윤곽선 자동 감지 → 마스크에 포함 ────────
-        // 마스크 주변 20px 범위 계산
-        const k15 = cv.Mat.ones(15, 15, cv.CV_8U);
+        // ── 2. 피사체 어두운 윤곽선·그림자 자동 감지 → 마스크에 포함 ────────
+        // 그림자는 피사체에서 멀리까지 뻗으므로 이미지 비례 탐색 반경 사용
+        const shadowR = Math.max(50, Math.round(Math.min(bgr.cols, bgr.rows) * 0.1));
+        const kShadow = cv.Mat.ones(shadowR, shadowR, cv.CV_8U);
         const nearMask = new cv.Mat();
-        cv.dilate(mask, nearMask, k15);
-        k15.delete();
+        cv.dilate(mask, nearMask, kShadow);
+        kShadow.delete();
 
         // 마스크 근방 밖 = 순수 배경 픽셀
         const notNear = new cv.Mat();
@@ -262,8 +263,9 @@ async function runInpainting() {
         const bgStd  = stdMat.data64F[0];
         meanMat.delete(); stdMat.delete();
 
-        // 배경보다 어두운 픽셀(= 피사체 경계)을 마스크에 추가
-        const darkThresh = Math.max(10, bgLum - bgStd * 1.5);
+        // 배경보다 어두운 픽셀(= 피사체 경계 및 그림자)을 마스크에 포함
+        // 임계값을 낮춰(0.8σ) 옅은 그림자까지 감지
+        const darkThresh = Math.max(10, bgLum - bgStd * 0.8);
         const darkMap = new cv.Mat();
         cv.threshold(imgGray, darkMap, darkThresh, 255, cv.THRESH_BINARY_INV);
         imgGray.delete();
