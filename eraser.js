@@ -30,8 +30,8 @@ let drawHistory = [];
 let session = null;
 let processedImageUrl = null;
 
-// Model URL
-const MODEL_URL = 'https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx';
+// Model URL - Using a web-optimized FP16 version to avoid int64 issues and reduce size
+const MODEL_URL = 'https://huggingface.co/Xenova/lama-fp16/resolve/main/onnx/model_fp16.onnx';
 
 // Initialize
 async function init() {
