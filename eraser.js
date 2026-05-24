@@ -232,23 +232,29 @@ async function runInpainting() {
         const mask = new cv.Mat();
         cv.threshold(gray, mask, 1, 255, cv.THRESH_BINARY);
 
-        // 마스크 약간 팽창 (브러시 경계 잔상 제거)
-        const kernel = cv.Mat.ones(3, 3, cv.CV_8U);
+        // 마스크를 크게 팽창: 피사체 경계의 어두운 윤곽선까지 포함시켜 번짐 방지
+        const kernel = cv.Mat.ones(7, 7, cv.CV_8U);
         const dilated = new cv.Mat();
-        cv.dilate(mask, dilated, kernel);
+        cv.dilate(mask, dilated, kernel, new cv.Point(-1, -1), 3); // 3회 반복 팽창
 
-        // RGBA → BGR 변환 후 인페인팅
+        // RGBA → BGR 변환
         const bgr = new cv.Mat();
         cv.cvtColor(src, bgr, cv.COLOR_RGBA2BGR);
+
+        // 1차: Navier-Stokes (넓은 균일 배경 복원에 적합, 반경 20)
+        const pass1 = new cv.Mat();
+        cv.inpaint(bgr, dilated, pass1, 20, cv.INPAINT_NS);
+
+        // 2차: Telea로 텍스처 디테일 정제 (반경 5)
         const result = new cv.Mat();
-        cv.inpaint(bgr, dilated, result, 5, cv.INPAINT_TELEA);
+        cv.inpaint(pass1, dilated, result, 5, cv.INPAINT_TELEA);
 
         // BGR → RGBA 변환 후 캔버스에 출력
         const rgba = new cv.Mat();
         cv.cvtColor(result, rgba, cv.COLOR_BGR2RGBA);
         cv.imshow(imageCanvas, rgba);
 
-        [src, maskRGBA, gray, mask, kernel, dilated, bgr, result, rgba].forEach(m => m.delete());
+        [src, maskRGBA, gray, mask, kernel, dilated, bgr, pass1, result, rgba].forEach(m => m.delete());
 
         clearMask();
         if (processedImageUrl) URL.revokeObjectURL(processedImageUrl);
