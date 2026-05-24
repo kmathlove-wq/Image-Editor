@@ -227,42 +227,92 @@ async function runInpainting() {
 
         await waitForOpenCV();
 
-        statusText.innerText = '이미지 분석 및 복원 중...';
-        if (progressBar) progressBar.style.width = '50%';
+        statusText.innerText = '이미지 분석 중...';
+        if (progressBar) progressBar.style.width = '30%';
 
-        // 원본 이미지 읽기
         const src = cv.imread(imageCanvas);
 
-        // 마스크 캔버스 → 이진 마스크 생성 (브러시로 칠한 영역 = 255)
+        // ── 1. 브러시 마스크 생성 ──────────────────────────────────────
         const maskRGBA = cv.imread(maskCanvas);
-        const gray = new cv.Mat();
-        cv.cvtColor(maskRGBA, gray, cv.COLOR_RGBA2GRAY);
+        const grayMask = new cv.Mat();
+        cv.cvtColor(maskRGBA, grayMask, cv.COLOR_RGBA2GRAY);
         const mask = new cv.Mat();
-        cv.threshold(gray, mask, 1, 255, cv.THRESH_BINARY);
+        cv.threshold(grayMask, mask, 1, 255, cv.THRESH_BINARY);
 
-        // 마스크를 크게 팽창: 피사체 경계의 어두운 윤곽선까지 포함시켜 번짐 방지
-        const kernel = cv.Mat.ones(7, 7, cv.CV_8U);
-        const dilated = new cv.Mat();
-        cv.dilate(mask, dilated, kernel, new cv.Point(-1, -1), 3); // 3회 반복 팽창
-
-        // RGBA → BGR 변환
         const bgr = new cv.Mat();
         cv.cvtColor(src, bgr, cv.COLOR_RGBA2BGR);
 
-        // 1차: Navier-Stokes (넓은 균일 배경 복원에 적합, 반경 20)
-        const pass1 = new cv.Mat();
-        cv.inpaint(bgr, dilated, pass1, 20, cv.INPAINT_NS);
+        // ── 2. 피사체 어두운 윤곽선 자동 감지 → 마스크에 포함 ────────
+        // 마스크 주변 20px 범위 계산
+        const k15 = cv.Mat.ones(15, 15, cv.CV_8U);
+        const nearMask = new cv.Mat();
+        cv.dilate(mask, nearMask, k15);
+        k15.delete();
 
-        // 2차: Telea로 텍스처 디테일 정제 (반경 5)
+        // 마스크 근방 밖 = 순수 배경 픽셀
+        const notNear = new cv.Mat();
+        cv.bitwise_not(nearMask, notNear);
+
+        // 배경 평균 밝기 측정
+        const imgGray = new cv.Mat();
+        cv.cvtColor(bgr, imgGray, cv.COLOR_BGR2GRAY);
+        const meanMat = new cv.Mat(), stdMat = new cv.Mat();
+        cv.meanStdDev(imgGray, meanMat, stdMat, notNear);
+        const bgLum  = meanMat.data64F[0];
+        const bgStd  = stdMat.data64F[0];
+        meanMat.delete(); stdMat.delete();
+
+        // 배경보다 어두운 픽셀(= 피사체 경계)을 마스크에 추가
+        const darkThresh = Math.max(10, bgLum - bgStd * 1.5);
+        const darkMap = new cv.Mat();
+        cv.threshold(imgGray, darkMap, darkThresh, 255, cv.THRESH_BINARY_INV);
+        imgGray.delete();
+
+        const darkNear = new cv.Mat();
+        cv.bitwise_and(darkMap, nearMask, darkNear);
+        darkMap.delete(); nearMask.delete();
+
+        const extMask = new cv.Mat();
+        cv.bitwise_or(mask, darkNear, extMask);
+        mask.delete(); darkNear.delete();
+
+        // ── 3. 확장된 마스크 팽창 (7×7, 2회) ────────────────────────
+        const k7 = cv.Mat.ones(7, 7, cv.CV_8U);
+        const dilated = new cv.Mat();
+        cv.dilate(extMask, dilated, k7, new cv.Point(-1, -1), 2);
+        k7.delete(); extMask.delete();
+
+        // ── 4. 배경 평균색으로 마스크 영역 선채우기 (번짐 원천 차단) ─
+        statusText.innerText = '배경 복원 중...';
+        if (progressBar) progressBar.style.width = '60%';
+
+        const invDilated = new cv.Mat();
+        cv.bitwise_not(dilated, invDilated);
+        const bgMean = new cv.Mat(), bgStdMat = new cv.Mat();
+        cv.meanStdDev(bgr, bgMean, bgStdMat, invDilated);
+        invDilated.delete(); bgStdMat.delete();
+
+        const prefilled = bgr.clone();
+        prefilled.setTo(
+            new cv.Scalar(bgMean.data64F[0], bgMean.data64F[1], bgMean.data64F[2]),
+            dilated
+        );
+        bgMean.delete();
+
+        // ── 5. Telea 인페인팅 (반경 5) — 경계만 자연스럽게 블렌딩 ──
+        statusText.innerText = '경계 정리 중...';
+        if (progressBar) progressBar.style.width = '80%';
+
         const result = new cv.Mat();
-        cv.inpaint(pass1, dilated, result, 5, cv.INPAINT_TELEA);
+        cv.inpaint(prefilled, dilated, result, 5, cv.INPAINT_TELEA);
+        prefilled.delete();
 
-        // BGR → RGBA 변환 후 캔버스에 출력
+        // BGR → RGBA → 캔버스 출력
         const rgba = new cv.Mat();
         cv.cvtColor(result, rgba, cv.COLOR_BGR2RGBA);
         cv.imshow(imageCanvas, rgba);
 
-        [src, maskRGBA, gray, mask, kernel, dilated, bgr, pass1, result, rgba].forEach(m => m.delete());
+        [src, maskRGBA, grayMask, bgr, notNear, dilated, result, rgba].forEach(m => m.delete());
 
         clearMask();
         if (processedImageUrl) URL.revokeObjectURL(processedImageUrl);
