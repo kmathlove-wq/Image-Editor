@@ -89,11 +89,49 @@
             <div class="footer-content">
                 <p>&copy; 2026 AI Image Tools. Built with Advanced AI Technology.</p>
                 <div class="footer-links">
-                    <a href="index.html">배경 제거</a>
-                    <a href="eraser.html">AI 지우개</a>
+                    <div class="footer-nav">
+                        <a href="index.html">배경 제거</a>
+                        <a href="eraser.html">AI 지우개</a>
+                    </div>
+                    <div class="footer-legal">
+                        <a href="#" id="terms-link">이용약관</a>
+                        <a href="#" id="privacy-link">개인정보처리방침</a>
+                    </div>
                 </div>
             </div>
         </footer>
+    </div>
+
+    <!-- Terms of Service Modal -->
+    <div id="terms-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>이용약관</h2>
+                <button class="modal-close" aria-label="닫기">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h3>1. 서비스 개요</h3>
+                <p>본 서비스는 AI 기술을 활용하여 이미지의 배경을 제거하거나 원치 않는 개체를 삭제하는 무료 온라인 도구입니다.</p>
+                <h3>2. 서비스 이용 약관</h3>
+                <p>본 서비스를 이용함으로써, 사용자는 이 약관의 모든 내용에 동의하는 것으로 간주됩니다.</p>
+                <h3>3. 책임의 한계</h3>
+                <p>본 서비스 사용으로 인한 결과에 대해 제공자는 책임을 지지 않습니다.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Privacy Policy Modal -->
+    <div id="privacy-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>개인정보처리방침</h2>
+                <button class="modal-close" aria-label="닫기">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h3>1. 개인정보 보호</h3>
+                <p>모든 이미지 처리는 사용자의 브라우저에서 로컬로 수행됩니다. 이미지 데이터는 서버로 전송되거나 저장되지 않습니다.</p>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="eraser.js"></script>

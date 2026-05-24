@@ -466,6 +466,13 @@ footer {
 
 .footer-links {
     display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.footer-nav, .footer-legal {
+    display: flex;
+    justify-content: center;
     gap: 1.5rem;
 }
 
